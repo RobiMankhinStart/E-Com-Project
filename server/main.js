@@ -14,7 +14,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin:
+      process.env.CLIENT_URL || "https://e-com-project-client.vercel.app/",
     credentials: true,
   }),
 );
