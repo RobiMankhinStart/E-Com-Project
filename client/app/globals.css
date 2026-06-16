@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@theme {
+  /* Design System: Indigo Vault */
+  --color-primary: #4f46e5;
+  --color-primary-light: #6366f1;
+  --color-primary-dark: #4338ca;
+
+  /* Typography: Manrope */
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+
+  /* Roundness: Round Eight */
+  --radius-default: 8px;
+}
+
+/* Base styles to ensure the layout works correctly */
+@layer base {
+  html,
+  body {
+    @apply h-full antialiased;
+  }
+
+  body {
+    @apply bg-white text-slate-900;
+  }
+}
+
+/* Custom Utilities if needed */
+@utility container-custom {
+  max-width: 1440px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 2rem;
+  padding-right: 2rem;
+}
