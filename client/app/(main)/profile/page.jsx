@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useDispatch, useSelector } from "react-redux";
+import { setUser } from "@/app/store/authSlice";
 import { apiClient } from "@/app/lib/apiClient";
 import {
   User,
@@ -15,12 +17,43 @@ import {
   ChevronRight,
   MessageSquare,
   FileText,
+  Loader,
+  AlertCircle,
+  CheckCircle,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
 const CustomerDashboard = () => {
   const [activeTab, setActiveTab] = useState("Profile");
   const router = useRouter();
+  const dispatch = useDispatch();
+  const userData = useSelector((state) => state.auth.user);
+
+  // Profile form state
+  const [formData, setFormData] = useState({
+    fullName: "",
+    phone: "",
+    address: "",
+  });
+  const [avatarPreview, setAvatarPreview] = useState("");
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ type: "", text: "" });
+  const fileInputRef = useRef(null);
+
+  // Fetch user profile on component mount
+  useEffect(() => {
+    if (userData) {
+      setFormData({
+        fullName: userData.fullName || "",
+        phone: userData.phone || "",
+        address: userData.address || "",
+      });
+      if (userData.avatar) {
+        setAvatarPreview(userData.avatar);
+      }
+    }
+  }, [userData]);
 
   const clearCartStorage = () => {
     if (typeof window === "undefined") return;
@@ -37,6 +70,101 @@ const CustomerDashboard = () => {
     } finally {
       clearCartStorage();
       router.push("/signin");
+    }
+  };
+
+  // Handle form input changes
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // Handle avatar file selection
+  const handleAvatarChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file size (max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        setMessage({ type: "error", text: "File size must be less than 2MB" });
+        return;
+      }
+
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        setMessage({ type: "error", text: "Please select a valid image file" });
+        return;
+      }
+
+      setAvatarFile(file);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Handle save changes
+  const handleSaveChanges = async () => {
+    try {
+      setLoading(true);
+      setMessage({ type: "", text: "" });
+
+      // Validate required fields
+      if (!formData.fullName.trim()) {
+        setMessage({ type: "error", text: "Full Name is required" });
+        return;
+      }
+
+      // Create FormData for multipart/form-data
+      const updateData = new FormData();
+      updateData.append("fullName", formData.fullName);
+      updateData.append("phone", String(formData.phone || ""));
+      updateData.append("address", formData.address || "");
+
+      // Add avatar if a new one was selected
+      if (avatarFile) {
+        updateData.append("avatar", avatarFile);
+      }
+
+      // Send update request with custom headers for file upload
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"}/auth/profile`,
+        {
+          method: "PUT",
+          body: updateData,
+          credentials: "include",
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to update profile");
+      }
+
+      // Update Redux state with new user data
+      if (data.data) {
+        dispatch(setUser(data.data));
+        setMessage({
+          type: "success",
+          text: "Profile updated successfully!",
+        });
+        setAvatarFile(null); // Clear the selected file after successful upload
+      }
+    } catch (error) {
+      console.error("Update failed:", error);
+      setMessage({
+        type: "error",
+        text: error.message || "Failed to update profile",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -88,7 +216,10 @@ const CustomerDashboard = () => {
           <div className="flex items-center gap-3">
             <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm">
               <Image
-                src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=100&auto=format&fit=crop"
+                src={
+                  userData?.avatar ||
+                  "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=100&auto=format&fit=crop"
+                }
                 alt="User Avatar"
                 fill
                 className="object-cover"
@@ -96,10 +227,10 @@ const CustomerDashboard = () => {
             </div>
             <div>
               <p className="font-black text-xs text-slate-900 truncate w-24">
-                Alexander Chen
+                {userData?.fullName || "User"}
               </p>
               <p className="text-[10px] text-slate-400 font-bold uppercase">
-                Gold Member
+                {userData?.role === "admin" ? "Admin User" : "Member"}
               </p>
             </div>
           </div>
@@ -153,106 +284,179 @@ const CustomerDashboard = () => {
           </p>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-8 space-y-8">
-            <section className="bg-white rounded-[40px] p-8 md:p-10 shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-10">
-                <h3 className="text-xl font-black text-slate-900 tracking-tight">
-                  Personal Profile
-                </h3>
-                <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">
-                  Update Info
-                </button>
-              </div>
+        {/* Message notifications */}
+        {message.text && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className={`mb-6 p-4 rounded-2xl flex items-center gap-3 ${
+              message.type === "success"
+                ? "bg-green-50 border border-green-200 text-green-700"
+                : "bg-red-50 border border-red-200 text-red-700"
+            }`}
+          >
+            {message.type === "success" ? (
+              <CheckCircle size={20} />
+            ) : (
+              <AlertCircle size={20} />
+            )}
+            <span className="font-medium">{message.text}</span>
+          </motion.div>
+        )}
 
-              <div className="flex flex-col md:flex-row gap-8 items-start mb-10">
-                <div className="relative group">
-                  <div className="w-32 h-32 rounded-[32px] overflow-hidden ring-8 ring-slate-50 shadow-inner relative">
-                    <Image
-                      src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=300&auto=format&fit=crop"
-                      alt="Profile"
-                      fill
-                      className="object-cover"
+        {/* Profile Tab Content */}
+        {activeTab === "Profile" && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="lg:col-span-8 space-y-8">
+              <section className="bg-white rounded-[40px] p-8 md:p-10 shadow-sm border border-slate-100">
+                <div className="flex items-center justify-between mb-10">
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                    Personal Profile
+                  </h3>
+                </div>
+
+                <div className="flex flex-col md:flex-row gap-8 items-start mb-10">
+                  <div className="relative group">
+                    <div className="w-32 h-32 rounded-[32px] overflow-hidden ring-8 ring-slate-50 shadow-inner relative">
+                      <Image
+                        src={
+                          avatarPreview ||
+                          userData?.avatar ||
+                          "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=300&auto=format&fit=crop"
+                        }
+                        alt="Profile"
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute -bottom-2 -right-2 bg-indigo-600 text-white p-3 rounded-2xl shadow-xl hover:scale-110 transition-transform"
+                    >
+                      <Camera size={18} />
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarChange}
+                      className="hidden"
                     />
                   </div>
-                  <button className="absolute -bottom-2 -right-2 bg-indigo-600 text-white p-3 rounded-2xl shadow-xl hover:scale-110 transition-transform">
-                    <Camera size={18} />
+                  <div className="flex-1 pt-2">
+                    <h4 className="font-black text-slate-900 text-lg">
+                      Avatar Image
+                    </h4>
+                    <p className="text-sm text-slate-400 mt-1 leading-relaxed">
+                      High resolution JPG or PNG recommended. <br />
+                      Max size of 2MB.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="mt-5 text-xs font-black text-indigo-600 px-6 py-3 bg-indigo-50 rounded-2xl border border-indigo-100 hover:bg-indigo-100 transition-colors"
+                    >
+                      Change Photo
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <FormInput
+                    label="Full Name"
+                    name="fullName"
+                    value={formData.fullName}
+                    onChange={handleInputChange}
+                    placeholder="Enter your full name"
+                  />
+                  <FormInput
+                    label="Phone Number"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    placeholder="Enter your phone number"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Residential Address
+                  </label>
+                  <textarea
+                    name="address"
+                    value={formData.address}
+                    onChange={handleInputChange}
+                    className="w-full bg-slate-50 border-none rounded-3xl py-5 px-6 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 transition-all outline-none"
+                    rows="3"
+                    placeholder="Enter your residential address"
+                  />
+                </div>
+                <div className="flex justify-end pt-10">
+                  <button
+                    onClick={handleSaveChanges}
+                    disabled={loading}
+                    className="bg-slate-900 text-white px-12 py-5 rounded-[24px] font-black text-sm shadow-2xl shadow-slate-200 hover:bg-indigo-600 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {loading && <Loader size={16} className="animate-spin" />}
+                    {loading ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
-                <div className="flex-1 pt-2">
-                  <h4 className="font-black text-slate-900 text-lg">
-                    Avatar Image
-                  </h4>
-                  <p className="text-sm text-slate-400 mt-1 leading-relaxed">
-                    High resolution JPG or PNG recommended. <br />
-                    Max size of 2MB.
-                  </p>
-                  <button className="mt-5 text-xs font-black text-indigo-600 px-6 py-3 bg-indigo-50 rounded-2xl border border-indigo-100 hover:bg-indigo-100 transition-colors">
-                    Change Photo
-                  </button>
-                </div>
-              </div>
+              </section>
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <FormInput label="Full Name" defaultValue="Alexander Chen" />
-                <FormInput
-                  label="Phone Number"
-                  defaultValue="+1 (555) 012-3456"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                  Residential Address
-                </label>
-                <textarea
-                  className="w-full bg-slate-50 border-none rounded-3xl py-5 px-6 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 transition-all outline-none"
-                  rows="3"
-                  defaultValue="742 Evergreen Terrace, Springfield, OR 97403, United States"
-                />
-              </div>
-              <div className="flex justify-end pt-10">
-                <button className="bg-slate-900 text-white px-12 py-5 rounded-[24px] font-black text-sm shadow-2xl shadow-slate-200 hover:bg-indigo-600 transition-all active:scale-95">
-                  Save Changes
-                </button>
-              </div>
-            </section>
-
-            <section className="bg-white rounded-[40px] p-8 shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-xl font-black text-slate-900 tracking-tight">
-                  Recent Acquisitions
+            <div className="lg:col-span-4 space-y-8">
+              <LoyaltyCard />
+              <div className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-100">
+                <h3 className="font-black text-[10px] mb-6 uppercase tracking-[0.2em] text-slate-400">
+                  Quick Support
                 </h3>
-                <button className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600">
-                  View All
-                </button>
-              </div>
-              <div className="space-y-4">
-                {recentOrders.map((order) => (
-                  <OrderItem key={order.id} order={order} />
-                ))}
-              </div>
-            </section>
-          </div>
-
-          <div className="lg:col-span-4 space-y-8">
-            <LoyaltyCard />
-            <div className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-100">
-              <h3 className="font-black text-[10px] mb-6 uppercase tracking-[0.2em] text-slate-400">
-                Quick Support
-              </h3>
-              <div className="space-y-3">
-                <SupportButton
-                  icon={<MessageSquare size={16} />}
-                  label="Live Concierge Chat"
-                />
-                <SupportButton
-                  icon={<FileText size={16} />}
-                  label="Return Policy & Forms"
-                />
+                <div className="space-y-3">
+                  <SupportButton
+                    icon={<MessageSquare size={16} />}
+                    label="Live Concierge Chat"
+                  />
+                  <SupportButton
+                    icon={<FileText size={16} />}
+                    label="Return Policy & Forms"
+                  />
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* My Orders Tab Content */}
+        {activeTab === "My Orders" && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="lg:col-span-8">
+              <section className="bg-white rounded-[40px] p-8 shadow-sm border border-slate-100">
+                <div className="flex items-center justify-between mb-8">
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                    Recent Orders
+                  </h3>
+                </div>
+                <div className="space-y-4">
+                  {recentOrders.length > 0 ? (
+                    recentOrders.map((order) => (
+                      <OrderItem key={order.id} order={order} />
+                    ))
+                  ) : (
+                    <div className="text-center py-12">
+                      <Package
+                        size={48}
+                        className="mx-auto text-slate-300 mb-4"
+                      />
+                      <p className="text-slate-400 font-medium">
+                        No orders yet
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
@@ -260,15 +464,27 @@ const CustomerDashboard = () => {
 
 // --- Sub-components for cleaner structure ---
 
-const FormInput = ({ label, defaultValue }) => (
+const FormInput = ({
+  label,
+  name,
+  value,
+  onChange,
+  placeholder,
+  defaultValue,
+  type = "text",
+}) => (
   <div className="space-y-2">
     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
       {label}
     </label>
     <input
+      name={name}
+      value={String(value || defaultValue || "")}
+      onChange={onChange}
       className="w-full bg-slate-50 border-none rounded-2xl py-5 px-6 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 transition-all outline-none"
-      type="text"
-      defaultValue={defaultValue}
+      type={type}
+      placeholder={placeholder}
+      inputMode={name === "phone" ? "tel" : "text"}
     />
   </div>
 );
