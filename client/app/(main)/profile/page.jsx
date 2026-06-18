@@ -43,8 +43,8 @@ const CustomerDashboard = () => {
   const sidebarLinks = [
     { name: "Profile", icon: <User size={18} /> },
     { name: "My Orders", icon: <Package size={18} /> },
-    { name: "Address Book", icon: <BookOpen size={18} /> },
-    { name: "Settings", icon: <Settings size={18} /> },
+    // { name: "Address Book", icon: <BookOpen size={18} /> },
+    // { name: "Settings", icon: <Settings size={18} /> },
   ];
 
   const recentOrders = [
@@ -76,13 +76,33 @@ const CustomerDashboard = () => {
       {/* Sidebar */}
       {/* 2. Switched 'fixed' to 'sticky' and added 'self-start' so it doesn't stretch */}
       <aside className="hidden md:flex w-72 sticky top-0 max-h-screen overflow-y-auto bg-white border-r border-slate-100 p-8 flex-col z-40 self-start">
-        <div className="mb-12 pt-2">
+        {/* <div className="">
           <h1 className="text-xl font-black text-indigo-600 tracking-tighter uppercase">
             Store Dashboard
           </h1>
           <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1 font-bold">
             RoyalCart
           </p>
+        </div> */}
+        <div className="mb-8 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm">
+              <Image
+                src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=100&auto=format&fit=crop"
+                alt="User Avatar"
+                fill
+                className="object-cover"
+              />
+            </div>
+            <div>
+              <p className="font-black text-xs text-slate-900 truncate w-24">
+                Alexander Chen
+              </p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase">
+                Gold Member
+              </p>
+            </div>
+          </div>
         </div>
 
         <nav className="flex-1 space-y-2">
@@ -101,29 +121,7 @@ const CustomerDashboard = () => {
             </button>
           ))}
         </nav>
-
-        <div className="mt-auto space-y-4">
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-            <div className="flex items-center gap-3">
-              <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm">
-                <Image
-                  src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=100&auto=format&fit=crop"
-                  alt="User Avatar"
-                  fill
-                  className="object-cover"
-                />
-              </div>
-              <div>
-                <p className="font-black text-xs text-slate-900 truncate w-24">
-                  Alexander Chen
-                </p>
-                <p className="text-[10px] text-slate-400 font-bold uppercase">
-                  Gold Member
-                </p>
-              </div>
-            </div>
-          </div>
-
+        <div className="mt-4 space-y-4">
           <button className="w-full flex items-center gap-3 px-4 py-2 text-sm font-bold text-slate-400 hover:text-indigo-600 transition-colors">
             <HelpCircle size={18} />
             Support
